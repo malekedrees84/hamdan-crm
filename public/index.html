@@ -407,16 +407,14 @@ async function fetchStatus() {
     const badge=document.getElementById('wa-number-badge');
     const numText=document.getElementById('wa-number-text');
     const disconnBtn=document.getElementById('wa-disconnect-btn');
+    modal.classList.remove('show'); // אל תציג popup אוטומטי — רק בהגדרות
     if(status==='connected' && number){
       numText.textContent='+'+number;
       badge.style.display='flex';
       if(disconnBtn && currentUser?.role==='admin') disconnBtn.style.display='';
       else if(disconnBtn) disconnBtn.style.display='none';
-      modal.classList.remove('show');
     } else {
       badge.style.display='none';
-      if(status==='qr_ready'){document.getElementById('qr-img').src=qrImage||'';modal.classList.add('show');}
-      else modal.classList.remove('show');
     }
   } catch{}
 }
