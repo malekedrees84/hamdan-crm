@@ -151,6 +151,7 @@
   <button class="tab-btn active" onclick="switchTab('leads',this)">📋 לידים</button>
   <button class="tab-btn admin-only" onclick="switchTab('courses',this)">📁 קורסים</button>
   <button class="tab-btn admin-only" onclick="switchTab('agents',this)">👥 נציגות</button>
+  <button class="tab-btn admin-only" onclick="switchTab('settings',this)">⚙️ הגדרות</button>
 </div>
 
 <div id="qr-modal">
@@ -220,6 +221,46 @@
     <div class="card">
       <div class="card-header"><h2>👥 נציגות</h2></div>
       <div class="agents-grid" id="agents-grid"></div>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div id="tab-settings" class="tab-content">
+    <div class="card" style="max-width:500px;margin:0 auto;">
+      <div class="card-header"><h2>⚙️ הגדרות מערכת</h2></div>
+      <div style="padding:24px;display:flex;flex-direction:column;gap:20px;">
+
+        <!-- WhatsApp Status -->
+        <div style="background:#f8f9fa;border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:14px;">
+          <div style="font-weight:600;font-size:.95rem;color:#333;">📱 WhatsApp</div>
+
+          <div style="display:flex;align-items:center;gap:10px;font-size:.88rem;">
+            <div class="wa-dot" id="settings-wa-dot"></div>
+            <span id="settings-wa-status-text" style="color:#555;">בודק...</span>
+          </div>
+
+          <div id="settings-wa-number-row" style="display:none;background:#e8f5e9;border-radius:8px;padding:10px 14px;font-size:.88rem;color:#2e7d32;font-weight:600;">
+            מחובר: <span id="settings-wa-number">—</span>
+          </div>
+
+          <div style="display:flex;gap:10px;flex-wrap:wrap;">
+            <button onclick="settingsDisconnect()" id="btn-wa-disconnect"
+              style="background:#e53935;color:white;border:none;border-radius:8px;padding:10px 18px;cursor:pointer;font-size:.85rem;font-weight:600;flex:1;">
+              🔌 נתק WhatsApp
+            </button>
+            <button onclick="settingsRefreshQR()" id="btn-wa-reconnect"
+              style="background:#075e54;color:white;border:none;border-radius:8px;padding:10px 18px;cursor:pointer;font-size:.85rem;font-weight:600;flex:1;">
+              🔄 חבר מחדש / QR חדש
+            </button>
+          </div>
+
+          <div id="settings-qr-area" style="display:none;text-align:center;padding-top:8px;">
+            <p style="font-size:.78rem;color:#666;margin-bottom:10px;">WhatsApp ← הגדרות ← מכשירים מקושרים ← קשר מכשיר</p>
+            <img id="settings-qr-img" src="" style="width:200px;height:200px;border-radius:10px;border:1px solid #eee;"/>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
 
@@ -296,6 +337,41 @@ async function refreshQR() {
   fetchStatus();
 }
 
+async function settingsDisconnect() {
+  if (!confirm('האם לנתק את WhatsApp?')) return;
+  document.getElementById('btn-wa-disconnect').disabled = true;
+  await fetch('/api/logout-whatsapp', {method:'POST'});
+  document.getElementById('btn-wa-disconnect').disabled = false;
+  updateSettingsStatus();
+}
+
+async function settingsRefreshQR() {
+  document.getElementById('btn-wa-reconnect').disabled = true;
+  await fetch('/api/logout-whatsapp', {method:'POST'});
+  await fetch('/api/reconnect-whatsapp', {method:'POST'});
+  document.getElementById('settings-qr-area').style.display = 'none';
+  document.getElementById('btn-wa-reconnect').disabled = false;
+  updateSettingsStatus();
+}
+
+async function updateSettingsStatus() {
+  try {
+    const {status, qrImage, number} = await (await fetch('/api/status')).json();
+    const dot = document.getElementById('settings-wa-dot');
+    const txt = document.getElementById('settings-wa-status-text');
+    const numRow = document.getElementById('settings-wa-number-row');
+    const numSpan = document.getElementById('settings-wa-number');
+    const qrArea = document.getElementById('settings-qr-area');
+    const qrImg = document.getElementById('settings-qr-img');
+    if (dot) dot.className = 'wa-dot ' + status;
+    if (txt) txt.textContent = status === 'connected' ? 'מחובר ✅' : status === 'qr_ready' ? 'ממתין לסריקה...' : 'מנותק ❌';
+    if (numRow) numRow.style.display = (status === 'connected' && number) ? '' : 'none';
+    if (numSpan && number) numSpan.textContent = '+' + number;
+    if (qrArea) qrArea.style.display = (status === 'qr_ready' && qrImage) ? '' : 'none';
+    if (qrImg && qrImage) qrImg.src = qrImage;
+  } catch {}
+}
+
 async function disconnectWhatsapp() {
   if(!confirm('האם לנתק את וואטסאפ? תצטרך לסרוק QR חדש.')) return;
   await fetch('/api/logout-whatsapp',{method:'POST'});
@@ -311,8 +387,9 @@ function switchTab(name, btn) {
   document.querySelectorAll('.tab-btn').forEach(e=>e.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
   btn.classList.add('active');
-  if(name==='courses') fetchCourses();
-  if(name==='agents')  fetchAgents();
+  if(name==='courses')  fetchCourses();
+  if(name==='agents')   fetchAgents();
+  if(name==='settings') { updateSettingsStatus(); setInterval(updateSettingsStatus, 4000); }
 }
 
 // ── Status ────────────────────────────────────────────
@@ -377,8 +454,6 @@ function actionBtns(l) {
   const phone=l.phone, name=esc(l.name||l.phone);
   let btns = `<button class="btn btn-chat" onclick="openPanel('${phone}','${name}')">💬</button>`;
 
-  if (!l.assigned_to && currentUser.role==='agent')
-    btns += `<button class="btn btn-claim" onclick="claimLead('${phone}')">✋ קח</button>`;
 
   if (l.status==='waiting'||l.status==='in_progress')
     btns += `<button class="btn btn-future" onclick="setStatus('${phone}','future')" title="שמור לעתיד">🔮</button>
