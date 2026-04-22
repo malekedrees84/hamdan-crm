@@ -181,27 +181,24 @@ app.delete('/api/courses/:index/file', requireAuth, requireAdmin, (req, res) => 
 });
 
 // ── Start ─────────────────────────────────────────────
-app.listen(PORT, async () => {
+app.listen(PORT, () => {
   console.log(`\n🚀 שרת פועל על http://localhost:${PORT}`);
   console.log('📱 מאתחל WhatsApp...\n');
   createClient();
 
-  // פתיחת tunnel לאינטרנט
-  try {
-    const localtunnel = require('localtunnel');
-    const tunnel = await localtunnel({ port: PORT, subdomain: 'hamdan-leads' });
-    console.log('\n🌐 ===================================');
-    console.log(`🔗 כתובת אונליין: ${tunnel.url}`);
-    console.log('🌐 ===================================\n');
-    console.log('📲 שלח כתובת זו לנציגות — הן נכנסות מכל מכשיר!\n');
-
-    tunnel.on('close', () => console.log('⚠️  Tunnel נסגר'));
-    tunnel.on('error', () => {
-      localtunnel({ port: PORT }).then(t => {
-        console.log(`\n🔗 כתובת חדשה: ${t.url}\n`);
-      });
-    });
-  } catch (err) {
-    console.log('⚠️  Tunnel לא הופעל:', err.message);
+  // הצג כתובת גישה
+  if (process.env.RAILWAY_PUBLIC_DOMAIN) {
+    console.log(`\n🌐 כתובת אונליין: https://${process.env.RAILWAY_PUBLIC_DOMAIN}\n`);
+  } else {
+    // locally - try localtunnel
+    try {
+      const localtunnel = require('localtunnel');
+      localtunnel({ port: PORT, subdomain: 'hamdan-leads' }).then(tunnel => {
+        console.log(`\n🔗 כתובת אונליין: ${tunnel.url}\n`);
+        tunnel.on('close', () => console.log('⚠️  Tunnel נסגר'));
+      }).catch(err => console.log('⚠️  Tunnel לא הופעל:', err.message));
+    } catch (err) {
+      console.log('⚠️  Tunnel לא הופעל:', err.message);
+    }
   }
 });
