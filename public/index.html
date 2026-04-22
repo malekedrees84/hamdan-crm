@@ -345,29 +345,43 @@ async function settingsDisconnect() {
   updateSettingsStatus();
 }
 
+let _settingsInterval = null;
+
 async function settingsRefreshQR() {
-  document.getElementById('btn-wa-reconnect').disabled = true;
+  const btn = document.getElementById('btn-wa-reconnect');
+  const txt = document.getElementById('settings-wa-status-text');
+  btn.disabled = true;
+  if (txt) txt.textContent = 'מתנתק...';
   await fetch('/api/logout-whatsapp', {method:'POST'});
   await fetch('/api/reconnect-whatsapp', {method:'POST'});
-  document.getElementById('settings-qr-area').style.display = 'none';
-  document.getElementById('btn-wa-reconnect').disabled = false;
-  updateSettingsStatus();
+  if (txt) txt.textContent = 'מחכה ל-QR...';
+  // poll עד שה-QR מוכן
+  let tries = 0;
+  const poll = setInterval(async () => {
+    tries++;
+    await updateSettingsStatus();
+    const status = document.getElementById('settings-wa-dot')?.className || '';
+    if (status.includes('qr_ready') || status.includes('connected') || tries > 30) {
+      clearInterval(poll);
+      btn.disabled = false;
+    }
+  }, 2000);
 }
 
 async function updateSettingsStatus() {
   try {
     const {status, qrImage, number} = await (await fetch('/api/status')).json();
-    const dot = document.getElementById('settings-wa-dot');
-    const txt = document.getElementById('settings-wa-status-text');
+    const dot    = document.getElementById('settings-wa-dot');
+    const txt    = document.getElementById('settings-wa-status-text');
     const numRow = document.getElementById('settings-wa-number-row');
-    const numSpan = document.getElementById('settings-wa-number');
+    const numSpan= document.getElementById('settings-wa-number');
     const qrArea = document.getElementById('settings-qr-area');
-    const qrImg = document.getElementById('settings-qr-img');
+    const qrImg  = document.getElementById('settings-qr-img');
     if (dot) dot.className = 'wa-dot ' + status;
-    if (txt) txt.textContent = status === 'connected' ? 'מחובר ✅' : status === 'qr_ready' ? 'ממתין לסריקה...' : 'מנותק ❌';
-    if (numRow) numRow.style.display = (status === 'connected' && number) ? '' : 'none';
+    if (txt) txt.textContent = status==='connected' ? 'מחובר ✅' : status==='qr_ready' ? 'סרוק את הברקוד 👇' : 'מנותק ❌';
+    if (numRow) numRow.style.display = (status==='connected' && number) ? '' : 'none';
     if (numSpan && number) numSpan.textContent = '+' + number;
-    if (qrArea) qrArea.style.display = (status === 'qr_ready' && qrImage) ? '' : 'none';
+    if (qrArea) qrArea.style.display = (status==='qr_ready' && qrImage) ? '' : 'none';
     if (qrImg && qrImage) qrImg.src = qrImage;
   } catch {}
 }
@@ -389,7 +403,7 @@ function switchTab(name, btn) {
   btn.classList.add('active');
   if(name==='courses')  fetchCourses();
   if(name==='agents')   fetchAgents();
-  if(name==='settings') { updateSettingsStatus(); setInterval(updateSettingsStatus, 4000); }
+  if(name==='settings') { if(!_settingsInterval){ _settingsInterval=setInterval(updateSettingsStatus,3000); } updateSettingsStatus(); }
 }
 
 // ── Status ────────────────────────────────────────────
