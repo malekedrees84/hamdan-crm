@@ -6,7 +6,7 @@ const qrcode   = require('qrcode');
 const multer   = require('multer');
 const session  = require('express-session');
 const db       = require('./db');
-const { createClient, getStatus, sendMessage, logoutClient } = require('./bot');
+const { initAllBots, connectBot, disconnectBot, getBotStatus, getAllBotsStatus, sendMessage } = require('./botManager');
 const { getCourseFileInfo } = require('./courseFiles');
 const { COURSES } = require('./conversation');
 
@@ -19,7 +19,7 @@ app.use(session({
   secret: 'hamdan-secret-2024',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 8 * 60 * 60 * 1000 }, // 8 שעות
+  cookie: { maxAge: 8 * 60 * 60 * 1000 },
 }));
 
 app.use(cors());
@@ -35,7 +35,7 @@ function requireAdmin(req, res, next) {
   res.status(403).json({ error: 'admin only' });
 }
 
-// ── Static (login page first) ─────────────────────────
+// ── Static ────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Auth routes ───────────────────────────────────────
@@ -58,22 +58,34 @@ app.get('/api/me', (req, res) => {
   res.json(req.session.agent);
 });
 
-// ── Status ────────────────────────────────────────────
+// ── Bots (multi-WhatsApp) ─────────────────────────────
+app.get('/api/bots', requireAuth, async (req, res) => {
+  const all = getAllBotsStatus();
+  const result = await Promise.all(all.map(async b => ({
+    ...b,
+    qrImage: b.qr ? await qrcode.toDataURL(b.qr) : null,
+    qr: undefined,
+  })));
+  res.json(result);
+});
+
+app.post('/api/bots/:id/connect', requireAuth, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  await connectBot(id);
+  res.json({ success: true });
+});
+
+app.post('/api/bots/:id/disconnect', requireAuth, requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  await disconnectBot(id);
+  res.json({ success: true });
+});
+
+// ── Legacy status (backward compat) ───────────────────
 app.get('/api/status', requireAuth, async (req, res) => {
-  const { status, qr, number } = getStatus();
-  let qrImage = null;
-  if (qr) qrImage = await qrcode.toDataURL(qr);
-  res.json({ status, qrImage, number });
-});
-
-app.post('/api/logout-whatsapp', requireAuth, requireAdmin, async (req, res) => {
-  await logoutClient();
-  res.json({ success: true });
-});
-
-app.post('/api/reconnect-whatsapp', requireAuth, requireAdmin, (req, res) => {
-  createClient();
-  res.json({ success: true });
+  const b = getBotStatus(1);
+  const qrImage = b.qr ? await qrcode.toDataURL(b.qr) : null;
+  res.json({ status: b.status, qrImage, number: b.number });
 });
 
 // ── Leads ─────────────────────────────────────────────
@@ -116,26 +128,22 @@ app.delete('/api/leads/:phone', requireAuth, requireAdmin, (req, res) => {
   res.json({ success: true });
 });
 
-// תפיסת ליד ע"י נציגה (ראשונה שלוחצת מקבלת אותו)
 app.post('/api/leads/:phone/claim', requireAuth, (req, res) => {
   const claimed = db.claimLead(req.params.phone, req.session.agent.id);
   res.json({ success: true, claimed });
 });
 
-// הקצאה / העברה — מנהל: כל ליד | נציגה: רק הלידים שלה
 app.post('/api/leads/:phone/assign', requireAuth, (req, res) => {
   const { agentId } = req.body;
   const lead = db.getLead(req.params.phone);
   if (!lead) return res.status(404).json({ error: 'lead not found' });
   const me = req.session.agent;
-  // נציגה יכולה להעביר רק ליד שמוקצה אליה
   if (me.role !== 'admin' && lead.assigned_to !== me.id)
     return res.status(403).json({ error: 'לא מורשה' });
   db.assignLead(req.params.phone, agentId || null);
   res.json({ success: true });
 });
 
-// הערות
 app.get('/api/leads/:phone/notes', requireAuth, (req, res) =>
   res.json(db.getNotes(req.params.phone))
 );
@@ -147,7 +155,6 @@ app.post('/api/leads/:phone/notes', requireAuth, (req, res) => {
 });
 
 // ── Agents ────────────────────────────────────────────
-// כולם צריכים את רשימת הנציגות (להעברת ליד)
 app.get('/api/agents', requireAuth, (req, res) =>
   res.json(db.getAllAgents())
 );
@@ -193,14 +200,12 @@ app.delete('/api/courses/:index/file', requireAuth, requireAdmin, (req, res) => 
 // ── Start ─────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🚀 שרת פועל על http://localhost:${PORT}`);
-  console.log('📱 מאתחל WhatsApp...\n');
-  createClient();
+  console.log('📱 מאתחל 3 מספרי WhatsApp...\n');
+  initAllBots();
 
-  // הצג כתובת גישה
   if (process.env.RAILWAY_PUBLIC_DOMAIN) {
     console.log(`\n🌐 כתובת אונליין: https://${process.env.RAILWAY_PUBLIC_DOMAIN}\n`);
   } else {
-    // locally - try localtunnel
     try {
       const localtunnel = require('localtunnel');
       localtunnel({ port: PORT, subdomain: 'hamdan-leads' }).then(tunnel => {

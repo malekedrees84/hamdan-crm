@@ -50,6 +50,7 @@ db.exec(`
   ['location',      'TEXT'],
   ['contact_phone', 'TEXT'],
   ['assigned_to',   'INTEGER'],
+  ['bot_id',        'INTEGER'],
 ].forEach(([col, type]) => {
   try { db.exec(`ALTER TABLE leads ADD COLUMN ${col} ${type}`); } catch {}
 });
@@ -68,7 +69,7 @@ function seedAgents() {
 seedAgents();
 
 // ── Leads ────────────────────────────────────────────────
-const saveLead    = db.prepare(`INSERT INTO leads (phone,status) VALUES (?,'waiting') ON CONFLICT(phone) DO UPDATE SET updated_at=CURRENT_TIMESTAMP`);
+const saveLead    = db.prepare(`INSERT INTO leads (phone,status,bot_id) VALUES (?,'waiting',?) ON CONFLICT(phone) DO UPDATE SET updated_at=CURRENT_TIMESTAMP, bot_id=COALESCE(leads.bot_id,excluded.bot_id)`);
 const updateLead  = db.prepare(`UPDATE leads SET name=COALESCE(?,name),location=COALESCE(?,location),contact_phone=COALESCE(?,contact_phone),course=COALESCE(?,course),status=COALESCE(?,status),updated_at=CURRENT_TIMESTAMP WHERE phone=?`);
 const assignLead  = db.prepare(`UPDATE leads SET assigned_to=?,status=CASE WHEN status='waiting' THEN 'in_progress' ELSE status END,updated_at=CURRENT_TIMESTAMP WHERE phone=?`);
 const getLead     = db.prepare(`SELECT * FROM leads WHERE phone=?`);
@@ -98,7 +99,7 @@ const getAgentByUser = db.prepare(`SELECT * FROM agents WHERE username=?`);
 
 module.exports = {
   // leads
-  saveLead:          (phone) => saveLead.run(phone),
+  saveLead:          (phone, botId) => saveLead.run(phone, botId || null),
   updateLead:        (phone, name, location, contactPhone, course, status) => updateLead.run(name, location, contactPhone, course, status, phone),
   assignLead:        (phone, agentId) => assignLead.run(agentId, phone),
   claimLead:         (phone, agentId) => {

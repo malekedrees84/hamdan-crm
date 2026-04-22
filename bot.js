@@ -95,7 +95,15 @@ function createClient() {
     }
   });
 
-  client.initialize();
+  client.initialize().catch(err => {
+    console.log('⚠️  שגיאה באתחול WhatsApp, מנסה שוב בעוד 5 שניות...', err.message);
+    botStatus = 'disconnected';
+    setTimeout(() => {
+      try { client?.destroy(); } catch {}
+      client = null;
+      createClient();
+    }, 5000);
+  });
 }
 
 function getStatus() {
