@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>כניסה – מכללת חמדאן חמדאן</title>
+  <style>
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body {
+      font-family:'Segoe UI',Arial,sans-serif;
+      background: linear-gradient(135deg,#075e54,#128c7e);
+      min-height:100vh; display:flex; align-items:center; justify-content:center;
+    }
+    .card {
+      background:white; border-radius:20px; padding:40px 36px;
+      width:100%; max-width:380px; box-shadow:0 8px 32px rgba(0,0,0,.2);
+      text-align:center;
+    }
+    .logo { font-size:2.5rem; margin-bottom:8px; }
+    h1 { color:#075e54; font-size:1.3rem; margin-bottom:4px; }
+    .sub { color:#888; font-size:.85rem; margin-bottom:28px; }
+    .field { margin-bottom:16px; text-align:right; }
+    label { display:block; font-size:.85rem; color:#555; margin-bottom:6px; }
+    input {
+      width:100%; padding:11px 14px; border:1.5px solid #ddd; border-radius:10px;
+      font-size:.95rem; outline:none; transition:border .2s;
+    }
+    input:focus { border-color:#075e54; }
+    .btn {
+      width:100%; padding:13px; background:#075e54; color:white; border:none;
+      border-radius:10px; font-size:1rem; font-weight:600; cursor:pointer;
+      margin-top:8px; transition:background .2s;
+    }
+    .btn:hover { background:#064e45; }
+    .error { color:#c62828; font-size:.85rem; margin-top:12px; min-height:20px; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🎓</div>
+  <h1>מכללת חמדאן חמדאן</h1>
+  <div class="sub">מערכת ניהול לידים</div>
+
+  <div class="field">
+    <label>שם משתמש</label>
+    <input type="text" id="username" placeholder="הכנס שם משתמש" autocomplete="username" />
+  </div>
+  <div class="field">
+    <label>סיסמה</label>
+    <input type="password" id="password" placeholder="הכנס סיסמה" autocomplete="current-password"
+           onkeydown="if(event.key==='Enter') login()" />
+  </div>
+  <button class="btn" onclick="login()">כניסה</button>
+  <div class="error" id="error"></div>
+</div>
+
+<script>
+  // אם כבר מחובר – עבור ישירות לדשבורד
+  fetch('/api/me').then(r => { if (r.ok) location.href='/index.html'; });
+
+  async function login() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    const err = document.getElementById('error');
+    err.textContent = '';
+    if (!username || !password) { err.textContent = 'אנא מלא את כל השדות'; return; }
+    const res = await fetch('/api/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (res.ok) location.href = '/index.html';
+    else err.textContent = data.error || 'שגיאה בכניסה';
+  }
+</script>
+</body>
+</html>
