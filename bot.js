@@ -6,6 +6,7 @@ const { handleMessage } = require('./conversation');
 let client = null;
 let qrCodeData = null;
 let botStatus = 'disconnected';
+let connectedNumber = null;
 
 function createClient() {
   client = new Client({
@@ -26,11 +27,13 @@ function createClient() {
   client.on('ready', () => {
     botStatus = 'connected';
     qrCodeData = null;
-    console.log('✅ WhatsApp מחובר ופועל!');
+    connectedNumber = client.info?.wid?.user || null;
+    console.log(`✅ WhatsApp מחובר ופועל! | רקם: ${connectedNumber}`);
   });
 
   client.on('disconnected', (reason) => {
     botStatus = 'disconnected';
+    connectedNumber = null;
     console.log('⚠️  WhatsApp התנתק:', reason);
   });
 
@@ -96,7 +99,25 @@ function createClient() {
 }
 
 function getStatus() {
-  return { status: botStatus, qr: qrCodeData };
+  return { status: botStatus, qr: qrCodeData, number: connectedNumber };
+}
+
+async function logoutClient() {
+  if (client) {
+    try { await client.logout(); } catch {}
+    try { await client.destroy(); } catch {}
+  }
+  client = null;
+  botStatus = 'disconnected';
+  qrCodeData = null;
+  connectedNumber = null;
+  // מחק את הסשן השמור
+  const fs = require('fs');
+  const path = require('path');
+  const authPath = path.join(__dirname, '.wwebjs_auth');
+  if (fs.existsSync(authPath)) {
+    fs.rmSync(authPath, { recursive: true, force: true });
+  }
 }
 
 async function sendMessage(phone, text) {
@@ -105,4 +126,4 @@ async function sendMessage(phone, text) {
   await client.sendMessage(chatId, text);
 }
 
-module.exports = { createClient, getStatus, sendMessage };
+module.exports = { createClient, getStatus, sendMessage, logoutClient };

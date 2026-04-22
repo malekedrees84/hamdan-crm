@@ -6,7 +6,7 @@ const qrcode   = require('qrcode');
 const multer   = require('multer');
 const session  = require('express-session');
 const db       = require('./db');
-const { createClient, getStatus, sendMessage } = require('./bot');
+const { createClient, getStatus, sendMessage, logoutClient } = require('./bot');
 const { getCourseFileInfo } = require('./courseFiles');
 const { COURSES } = require('./conversation');
 
@@ -60,10 +60,20 @@ app.get('/api/me', (req, res) => {
 
 // ── Status ────────────────────────────────────────────
 app.get('/api/status', requireAuth, async (req, res) => {
-  const { status, qr } = getStatus();
+  const { status, qr, number } = getStatus();
   let qrImage = null;
   if (qr) qrImage = await qrcode.toDataURL(qr);
-  res.json({ status, qrImage });
+  res.json({ status, qrImage, number });
+});
+
+app.post('/api/logout-whatsapp', requireAuth, requireAdmin, async (req, res) => {
+  await logoutClient();
+  res.json({ success: true });
+});
+
+app.post('/api/reconnect-whatsapp', requireAuth, requireAdmin, (req, res) => {
+  createClient();
+  res.json({ success: true });
 });
 
 // ── Leads ─────────────────────────────────────────────

@@ -139,6 +139,10 @@
 <header>
   <div class="wa-dot" id="wa-dot"></div>
   <h1>🎓 מכללת חמדאן חמדאן – CRM</h1>
+  <div id="wa-number-badge" style="background:rgba(255,255,255,.12);border-radius:20px;padding:4px 11px;font-size:.78rem;display:none;align-items:center;gap:5px;">
+    📱 <span id="wa-number-text">—</span>
+    <button id="wa-disconnect-btn" onclick="disconnectWhatsapp()" style="background:rgba(255,80,80,.7);border:none;color:white;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:.72rem;margin-right:4px;">فصل ↩</button>
+  </div>
   <div class="user-badge">👤 <span id="user-name">...</span> <span id="user-role-badge"></span></div>
   <button class="logout-btn" onclick="logout()">יציאה ↩</button>
 </header>
@@ -154,6 +158,7 @@
     <h2>סרוק QR Code</h2>
     <p>WhatsApp ← הגדרות ← מכשירים מקושרים ← קשר מכשיר</p>
     <img id="qr-img" src="" alt="QR"/>
+    <button onclick="refreshQR()" style="margin-top:12px;background:#075e54;color:white;border:none;border-radius:8px;padding:8px 18px;cursor:pointer;font-size:.85rem;width:100%;">🔄 חדש QR / Refresh QR</button>
   </div>
 </div>
 
@@ -284,6 +289,22 @@ async function boot() {
 
 async function logout() { await fetch('/api/logout',{method:'POST'}); location.href='/login.html'; }
 
+async function refreshQR() {
+  await fetch('/api/logout-whatsapp',{method:'POST'});
+  await fetch('/api/reconnect-whatsapp',{method:'POST'});
+  document.getElementById('qr-img').src='';
+  fetchStatus();
+}
+
+async function disconnectWhatsapp() {
+  if(!confirm('האם לנתק את וואטסאפ? תצטרך לסרוק QR חדש.')) return;
+  await fetch('/api/logout-whatsapp',{method:'POST'});
+  // אחרי ניתוק — שלח reconnect אוטומטי לקבל QR חדש
+  await fetch('/api/reconnect-whatsapp',{method:'POST'});
+  alert('וואטסאפ נותק. סרוק את ה-QR החדש שיופיע.');
+  fetchStatus();
+}
+
 // ── Tabs ──────────────────────────────────────────────
 function switchTab(name, btn) {
   document.querySelectorAll('.tab-content').forEach(e=>e.classList.remove('active'));
@@ -298,12 +319,24 @@ function switchTab(name, btn) {
 async function fetchStatus() {
   try {
     const r=await fetch('/api/status');
-    const {status,qrImage}=await r.json();
+    const {status,qrImage,number}=await r.json();
     const dot=document.getElementById('wa-dot'), modal=document.getElementById('qr-modal');
     dot.className='wa-dot '+status;
-    if(status==='connected') modal.classList.remove('show');
-    else if(status==='qr_ready'){document.getElementById('qr-img').src=qrImage||'';modal.classList.add('show');}
-    else modal.classList.remove('show');
+    // הצג/הסתר badge עם המספר
+    const badge=document.getElementById('wa-number-badge');
+    const numText=document.getElementById('wa-number-text');
+    const disconnBtn=document.getElementById('wa-disconnect-btn');
+    if(status==='connected' && number){
+      numText.textContent='+'+number;
+      badge.style.display='flex';
+      if(disconnBtn && currentUser?.role==='admin') disconnBtn.style.display='';
+      else if(disconnBtn) disconnBtn.style.display='none';
+      modal.classList.remove('show');
+    } else {
+      badge.style.display='none';
+      if(status==='qr_ready'){document.getElementById('qr-img').src=qrImage||'';modal.classList.add('show');}
+      else modal.classList.remove('show');
+    }
   } catch{}
 }
 
